@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLS, calcPreciseEV } from "./logic";
 import { C, f, font, mono, sc, sp } from "./constants";
-import { RotTab, HistoryTab, SettingsTab, ArchiveTab } from "./components/Tabs";
+import { DataTab, RotTab, HistoryTab, SettingsTab, ArchiveTab } from "./components/Tabs";
 
 export default function App() {
   const [tab, setTab] = useState("rot");
@@ -60,6 +60,7 @@ export default function App() {
   };
 
   const nav = [
+    { id: "data", label: "データ", icon: "📈" },
     { id: "rot", label: "回転数", icon: "📊" },
     { id: "history", label: "大当たり", icon: "📋" },
     { id: "archive", label: "記録", icon: "📁" },
@@ -91,6 +92,7 @@ export default function App() {
 
       {/* Main Content */}
       <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {tab === "data" && <DataTab ev={ev} jpLog={jpLog} S={S} />}
         {tab === "rot" && <RotTab border={border} rows={rotRows} setRows={setRotRows} S={S} ev={ev} />}
         {tab === "history" && <HistoryTab jpLog={jpLog} sesLog={sesLog} pushJP={pushJP} delJPLast={delJPLast} delSesLast={delSesLast} S={S} ev={ev} />}
         {tab === "archive" && <ArchiveTab S={S} onReset={resetAll} />}
