@@ -3,6 +3,59 @@ import { C, f, sc, sp, tsNow, font, mono } from "../constants";
 import { NI, Card, MiniStat, Btn, SecLabel, KV, ModeToggle } from "./Atoms";
 
 /* ================================================================
+   DataTab — 全データ一覧表示
+================================================================ */
+export function DataTab({ ev, jpLog, S }) {
+    const stat = (label, val, unit, col) => (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontSize: 13, color: C.sub, fontWeight: 600 }}>{label}</span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: 18, fontWeight: 800, color: col, fontFamily: mono }}>{val}</span>
+                <span style={{ fontSize: 10, color: C.sub }}>{unit}</span>
+            </div>
+        </div>
+    );
+
+    return (
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 14px calc(80px + env(safe-area-inset-bottom))" }}>
+            {/* 回転率・ボーダー */}
+            <Card style={{ marginTop: 12 }}>
+                <SecLabel label="回転率・ボーダー" />
+                {stat("1Kスタート", ev.start1K > 0 ? f(ev.start1K, 1) : "—", "回/K", sc(ev.bDiff))}
+                {stat("実測ボーダー", ev.measuredBorder > 0 ? f(ev.measuredBorder, 1) : "—", "回/K", C.subHi)}
+                {stat("ボーダー差", ev.bDiff !== 0 ? sp(ev.bDiff, 1) : "—", "回/K", sc(ev.bDiff))}
+            </Card>
+
+            {/* 期待値・収支 */}
+            <Card>
+                <SecLabel label="期待値・収支" />
+                {stat("期待値/K", ev.ev1K !== 0 ? sp(ev.ev1K, 0) : "—", "円", sc(ev.ev1K))}
+                {stat("仕事量", ev.workAmount !== 0 ? sp(ev.workAmount, 0) : "—", "円", sc(ev.workAmount))}
+                {stat("時給", ev.wage !== 0 ? sp(ev.wage, 0) : "—", "円/h", sc(ev.wage))}
+            </Card>
+
+            {/* 出玉データ */}
+            <Card>
+                <SecLabel label="出玉データ" />
+                {stat("平均1R出玉", ev.avg1R > 0 ? f(ev.avg1R, 1) : "—", "玉", C.teal)}
+                {stat("平均R数/初当たり", ev.avgRpJ > 0 ? f(ev.avgRpJ, 1) : "—", "R", C.blue)}
+                {stat("サポ増減/初当たり", ev.jpCount > 0 ? sp(ev.sapoPerJP, 0) : "—", "玉", sc(ev.sapoPerJP))}
+                {stat("平均純増/初当たり", ev.avgNetGainPerJP > 0 ? f(ev.avgNetGainPerJP, 0) : "—", "玉", C.green)}
+            </Card>
+
+            {/* 稼働データ */}
+            <Card>
+                <SecLabel label="稼働データ" />
+                {stat("初当たり回数", jpLog.length > 0 ? jpLog.length.toString() : "0", "回", C.green)}
+                {stat("総回転数", ev.netRot > 0 ? f(ev.netRot) : "—", "回", C.subHi)}
+                {stat("総投資額", ev.rawInvest > 0 ? f(ev.rawInvest) : "—", "円", C.red)}
+                {stat("持ち玉比率", ev.mochiRatio > 0 ? Math.round(ev.mochiRatio * 100).toString() : "0", "%", C.orange)}
+            </Card>
+        </div>
+    );
+}
+
+/* ================================================================
    RotTab — 回転数入力 + リアルタイム実測統計パネル
 ================================================================ */
 export function RotTab({ border, rows, setRows, S, ev }) {
@@ -114,53 +167,20 @@ export function RotTab({ border, rows, setRows, S, ev }) {
 
             {/* Bottom Panel */}
             <div style={{ background: C.surface, borderTop: `1px solid ${C.border}`, flexShrink: 0, paddingBottom: "calc(80px + env(safe-area-inset-bottom))", boxShadow: "0 -4px 20px rgba(0,0,0,0.4)", borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 16px 10px" }}>
-                    <span style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>操作</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px 8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <ModeToggle mode={S.playMode === "mochi" ? "持ち玉" : "現金"} setMode={(m) => S.setPlayMode(m === "持ち玉" ? "mochi" : "cash")} />
+                        {ev.mochiRatio > 0 && (
+                            <span style={{ fontSize: 10, color: C.orange, fontFamily: mono, fontWeight: 700 }}>
+                                持玉{Math.round(ev.mochiRatio * 100)}%
+                            </span>
+                        )}
+                    </div>
                     <button className="b" onClick={() => setRows((r) => r.slice(0, -1))} style={{ background: "rgba(239, 68, 68, 0.1)", border: `1px solid ${C.red}40`, borderRadius: 8, color: C.red, fontSize: 11, padding: "6px 12px", fontFamily: font, fontWeight: 700 }}>一行削除</button>
                 </div>
 
-                {/* Real-time Stats Panel */}
-                <div style={{ margin: "0 12px 10px", background: "rgba(0,0,0,0.2)", border: `1px solid ${ev.bDiff >= 0 ? C.green + "30" : C.red + "30"}`, borderRadius: 12, overflow: "hidden" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
-                        {[
-                            { label: "実測ボーダー", val: ev.measuredBorder > 0 ? f(ev.measuredBorder, 1) : "—", unit: "回/K", col: C.subHi },
-                            { label: "1Kスタート", val: ev.start1K > 0 ? f(ev.start1K, 1) : "—", unit: "回/K", col: sc(ev.bDiff) },
-                            { label: "期待値/K", val: ev.ev1K !== 0 ? sp(ev.ev1K, 0) : "—", unit: "円", col: sc(ev.ev1K) },
-                        ].map(({ label, val, unit, col }, idx) => (
-                            <div key={label} style={{ textAlign: "center", padding: "10px 2px", borderRight: idx < 2 ? `1px solid ${C.border}` : "none" }}>
-                                <div style={{ fontSize: 8, color: C.sub, letterSpacing: 0.5, marginBottom: 4, fontWeight: 600 }}>{label}</div>
-                                <div style={{ fontSize: 14, fontWeight: 800, color: col, fontFamily: mono, lineHeight: 1 }}>{val}</div>
-                                <div style={{ fontSize: 8, color: C.sub, marginTop: 2 }}>{unit}</div>
-                            </div>
-                        ))}
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: `1px solid ${C.border}` }}>
-                        {[
-                            { label: "仕事量", val: ev.workAmount !== 0 ? sp(ev.workAmount, 0) : "—", unit: "円", col: sc(ev.workAmount) },
-                            { label: "時給", val: ev.wage !== 0 ? sp(ev.wage, 0) : "—", unit: "円/h", col: sc(ev.wage) },
-                            { label: "平均1R出玉", val: ev.avg1R > 0 ? f(ev.avg1R, 1) : "—", unit: "玉", col: C.teal },
-                        ].map(({ label, val, unit, col }, idx) => (
-                            <div key={label} style={{ textAlign: "center", padding: "10px 2px", borderRight: idx < 2 ? `1px solid ${C.border}` : "none" }}>
-                                <div style={{ fontSize: 8, color: C.sub, letterSpacing: 0.5, marginBottom: 4, fontWeight: 600 }}>{label}</div>
-                                <div style={{ fontSize: 14, fontWeight: 800, color: col, fontFamily: mono, lineHeight: 1 }}>{val}</div>
-                                <div style={{ fontSize: 8, color: C.sub, marginTop: 2 }}>{unit}</div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Mode Toggle + Mochi Ratio */}
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, padding: "0 12px 10px" }}>
-                    <ModeToggle mode={S.playMode === "mochi" ? "持ち玉" : "現金"} setMode={(m) => S.setPlayMode(m === "持ち玉" ? "mochi" : "cash")} />
-                    {ev.mochiRatio > 0 && (
-                        <span style={{ fontSize: 10, color: C.orange, fontFamily: mono, fontWeight: 700 }}>
-                            持玉{Math.round(ev.mochiRatio * 100)}%
-                        </span>
-                    )}
-                </div>
-
                 {/* Input */}
-                <div style={{ padding: "0 12px 12px" }}>
+                <div style={{ padding: "0 12px 10px" }}>
                     <NI v={input} set={setInput} w="100%" ph="データカウンタの数値を入力" big onEnter={decide} />
                 </div>
 
