@@ -32,6 +32,9 @@ export default function App() {
   const [investYen, setInvestYen] = useLS("pt_investYen", 0);
   const [recoveryYen, setRecoveryYen] = useLS("pt_recoveryYen", 0);
 
+  // Registered stores
+  const [stores, setStores] = useLS("pt_stores", []);
+
   // Archives
   const [archives, setArchives] = useLS("pt_archives", []);
 
@@ -95,6 +98,7 @@ export default function App() {
     playMode, setPlayMode,
     storeName, setStoreName, machineNum, setMachineNum,
     investYen, setInvestYen, recoveryYen, setRecoveryYen,
+    stores, setStores,
     archives, setArchives,
     ev, handleMoveTable,
   };
