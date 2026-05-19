@@ -10,6 +10,7 @@ import { KeyMetrics } from "./decision/KeyMetrics";
 import { ReasonList } from "./decision/ReasonList";
 import { RecentEventList } from "./decision/RecentEventList";
 import HunterRankBadge from "./hunter/HunterRankBadge";
+import BadgeList from "./hunter/BadgeList";
 
 /* ================================================================
    Simple SVG Line Chart component
@@ -8062,6 +8063,11 @@ export function SettingsTab({ s, onReset }) {
                 {/* ハンターランク（Phase 6 本実装版） */}
                 <div style={{ marginTop: 14 }}>
                     <HunterRankBadge rank={s.hunterRank} />
+                </div>
+
+                {/* バッジ一覧（Phase 6 バッジ解放） */}
+                <div style={{ marginTop: 4, marginBottom: 14 }}>
+                    <BadgeList unlockedIds={s.hunterRank?.unlockedBadges} />
                 </div>
 
                 {/* 外観 */}
