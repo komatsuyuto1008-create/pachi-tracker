@@ -27,14 +27,14 @@ src/
   persistence.js                # IndexedDB(Dexie) バック memCache
   db.js                         # Dexie DB 定義
   snapshot.js                   # セッション復元保証
-  dummyData.js                  # 偵察モード等のダミーデータ生成
+  dummyData.js                  # 偵察/台選びモード等のダミーデータ生成
   constants.js                  # 配色 C / フォント / ヘルパー
   index.css                     # ダークネイビー配色（モック2準拠）
   components/
     Atoms.jsx                   # 共通UIパーツ
     Tabs.jsx                    # 記録モード内の主要UI（実戦タブ統合済み）
     ModeTabBar.jsx              # フッター5タブ（偵察/台選び/記録/分析/設定）
-    ModePlaceholder.jsx         # 未実装モード（台選び）のプレースホルダー
+    ModePlaceholder.jsx         # 旧プレースホルダー（未実装モード用）
     decision/
       evDecision.js             # 判断ロジック（純粋関数）
       DecisionTab.jsx           # 判断UI コンテナ（実戦タブ内に統合）
@@ -53,7 +53,11 @@ src/
     analysis/                   # 分析モード（Phase 2）
       AnalysisDashboard.jsx
       analysisSelectors.js
-    select/                     # 台選びモード（Phase 4、未実装）
+    select/                     # 台選びモード（Phase 4、ダミー島ヒートマップ）
+      SelectDashboard.jsx
+      selectSelectors.js
+      __tests__/
+        selectSelectors.test.mjs
   __tests__/
     protected-fns.mjs           # 保護関数境界値ハーネス
     baseline.json               # 完全一致テスト基準値
@@ -137,7 +141,7 @@ docs/
 - 調査レポート: ブランチ `claude/investigate-jackpot-flow-IXTu2` 内
 - 影響ファイル一覧: 調査レポート末尾「参照ファイル・行番号サマリー」を参照
 
-### 2-6. 狩猟型UX進化（Phase 0〜3 進行中）
+### 2-6. 狩猟型UX進化（Phase 0〜4 進行中）
 
 `docs/roadmap-hunter-ux.md` の 8 段階ロードマップを基準に進行中。
 モード切替は `App.jsx:465` の `currentMode` 分岐で管理。
@@ -152,7 +156,7 @@ docs/
 | 1.7 + 1.8 | ✅ 完了 | 記録モードに直近イベント表示（`RecentEventList`）と通知ベル/歯車ショートカット追加 | `702a932` / PR #180 |
 | 2 | ✅ 完了 | 分析モードを収支分析ダッシュボード（`AnalysisDashboard` + `analysisSelectors`）に刷新 | `5de0c86` / PR #181 |
 | 3 | ✅ 完了 | 偵察モードを店舗ランキング画面（`ScoutDashboard` + ダミーデータ）に刷新 | `b5dc141` / PR #182 |
-| 4 | ⏸️ 未着手 | 台選びモード（ヒートマップ＋良台TOP5）。`ModePlaceholder` 表示中 | ー |
+| 4 | ✅ 実装済み（ダミー） | 台選びモード（ヒートマップ＋良台TOP5）。`SelectDashboard` + `selectSelectors` + ダミー島データ | Codex作業 |
 | 5 | ⏸️ 未着手 | P-EVIDENCE 移植（GAS → JS）。**GAS 数式の共有が必須** | ー |
 | 6 | ⏸️ 未着手 | ハンターランク・通知 | ー |
 | 7 | ⏸️ 未着手 | モード連携・半自動切替・全体調整 | ー |
@@ -164,7 +168,8 @@ docs/
 - `src/components/decision/RecentEventList.jsx` — 直近イベント（`jpLog` + `sesLog` をマージ）
 - `src/components/scout/` — 偵察モード一式（`ScoutDashboard`, `StoreRankingCard`, `TodayHighlightList`, `scoutSelectors.js`）
 - `src/components/analysis/` — 分析モード一式（`AnalysisDashboard`, `analysisSelectors.js`）
-- `src/dummyData.js` — `getDummyStoreRanking`, `getDummyHighlights`, `todayKey`, `timeLabel`
+- `src/components/select/` — 台選びモード一式（`SelectDashboard`, `selectSelectors.js`, `selectSelectors.test.mjs`）
+- `src/dummyData.js` — `getDummyStoreRanking`, `getDummyHighlights`, `getDummyIslandMachines`, `todayKey`, `timeLabel`
 
 #### 配色変更（PR #177）
 
@@ -176,7 +181,7 @@ docs/
 
 ```jsx
 {currentMode === "scout"    && <ScoutDashboard S={S} />}
-{currentMode === "select"   && <ModePlaceholder mode="select" />}
+{currentMode === "select"   && <SelectDashboard S={S} onStart={...} />}
 {currentMode === "record"   && <RotTab border={border} rows={rotRows} setRows={setRotRows} S={S} ev={ev} />}
 {currentMode === "analysis" && <AnalysisDashboard S={S} ... />}
 {currentMode === "settings" && <SettingsTab s={S} onReset={resetAll} />}
@@ -385,8 +390,8 @@ Phase 5 着手前に **サブステップ4・5 を独立 PR で先行消化**す
 `docs/roadmap-hunter-ux.md` 参照。次に着手すべきは以下のいずれか：
 
 - **Phase 4**: 台選びモード（ヒートマップ + 良台TOP5）
-  - 現状は `ModePlaceholder` を表示
-  - 良台スコアリングの定義式・「島平均」「前日実績」の集計定義が**未確定**（要ユーザー確認）
+  - ダミー島データによる UI は実装済み
+  - 良台スコアリングの定義式・「島平均」「前日実績」の集計定義は**未確定**（実データ化前に要ユーザー確認）
 - **Phase 5**: P-EVIDENCE 移植
   - GAS スプレッドシートの数式群を **ユーザーから共有してもらうことが必須**
   - 共有まではインターフェース固定でダミー実装のまま進行可
@@ -595,7 +600,10 @@ ls src/components/analysis/   # AnalysisDashboard.jsx, analysisSelectors.js
 
 # Phase 3: 偵察ダッシュボード
 ls src/components/scout/      # ScoutDashboard, StoreRankingCard, TodayHighlightList, scoutSelectors.js
-ls src/dummyData.js           # 偵察モード用のダミーデータ
+ls src/dummyData.js           # 偵察/台選びモード用のダミーデータ
+
+# Phase 4: 台選びダッシュボード
+ls src/components/select/     # SelectDashboard.jsx, selectSelectors.js
 
 # Phase 1.7: 直近イベントリスト
 ls src/components/decision/RecentEventList.jsx
@@ -604,7 +612,8 @@ ls src/components/decision/RecentEventList.jsx
 ### 直近の状態サマリー（2026-05-19 時点）
 
 - **main ブランチ最新コミット**: `2968730`（PR #182、偵察モード Phase 3 完了）
-- **狩猟型UX**: Phase 0・1・1.B・1.5・1.6・1.7・1.8・2・3 完了。**次は Phase 4（台選びモード）または Phase 5（P-EVIDENCE 移植）**
+- **今回追加**: Codex が Phase 4（台選びモード）をダミー島データで実装。`src/components/select/`, `src/dummyData.js`, `src/App.jsx`, `docs/HANDOVER.md` を変更
+- **狩猟型UX**: Phase 0・1・1.B・1.5・1.6・1.7・1.8・2・3 完了。Phase 4 はダミーデータ駆動で実装済み。**次は Phase 4 の実データ化/スコアリング定義確定、または Phase 5（P-EVIDENCE 移植）**
 - **配色**: モック2準拠のブルー寄りダークネイビーに刷新済み（PR #177）
 - **判定バッジ**: 大型化＋円形試行充足率リング、各種表示バグ修正済み（PR #174・#175・#176）
 - **実戦タブ**: 判断 + 回転入力を統合（Phase 1.B、PR #173）。クイック入力 +1/+5/+10/+25 は廃止、テンキーは bottom sheet 化
@@ -628,9 +637,9 @@ ls src/components/decision/RecentEventList.jsx
 4. `node src/__tests__/protected-fns.mjs` でスナップショット確認
 5. `npm run lint && npm run build` エラーゼロ
 
-#### 候補B：狩猟型UX Phase 4（台選びモード）
+#### 候補B：狩猟型UX Phase 4 の実データ化・スコアリング定義
 
-理由：ロードマップ通りの進行。ただし良台スコアリング定義が未確定。
+理由：UI はダミーデータで実装済み。ただし良台スコアリング定義と島データ構造は未確定。
 
 着手前確認：
 - 良台スコアリングの定義式（True Border 余裕 + 試行充足率 + データ蓄積量の合成式）

@@ -4,9 +4,9 @@ import { useUndoStack } from "./history";
 import { C, font } from "./constants";
 import { RotTab, SettingsTab } from "./components/Tabs";
 import ModeTabBar from "./components/ModeTabBar";
-import ModePlaceholder from "./components/ModePlaceholder";
 import AnalysisDashboard from "./components/analysis/AnalysisDashboard";
 import ScoutDashboard from "./components/scout/ScoutDashboard";
+import SelectDashboard from "./components/select/SelectDashboard";
 import { takeSnapshot, takeSnapshotImmediate, getLatest as getLatestSnapshot } from "./snapshot";
 
 // 旧タブ名 → 新モード名 のマッピング
@@ -463,7 +463,16 @@ export default function App() {
         }}
       >
         {currentMode === "scout" && <ScoutDashboard S={S} />}
-        {currentMode === "select" && <ModePlaceholder mode="select" />}
+        {currentMode === "select" && (
+          <SelectDashboard
+            S={S}
+            onStart={(machine) => {
+              setMachineNum(String(machine.machineNumber || ""));
+              setMachineName(machine.machineName || "");
+              setCurrentMode("record");
+            }}
+          />
+        )}
         {currentMode === "record" && <RotTab border={border} rows={rotRows} setRows={setRotRows} S={S} ev={ev} />}
         {currentMode === "analysis" && (
           <AnalysisDashboard
