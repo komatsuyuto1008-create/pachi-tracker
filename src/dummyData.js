@@ -99,3 +99,50 @@ export function getDummyHighlights(dateStr = todayKey(), count = 4) {
   const pool = [...DUMMY_HIGHLIGHT_POOL].sort(() => rng() - 0.5);
   return pool.slice(0, count);
 }
+
+// 台選びモード用のダミー島データ（Phase 4）
+//
+// P-EVIDENCE 移植前の見た目優先プロトタイプ。日付と島名から決定論的に生成し、
+// localStorage には保存しない。実データ化後も UI の受け口を変えずに差し替えられる形にする。
+const DUMMY_SELECT_MACHINES = [
+  "P大海物語5",
+  "eシン・エヴァンゲリオン",
+  "P北斗の拳 強敵",
+  "P牙狼11",
+];
+
+export function getDummyIslandMachines(dateStr = todayKey(), { start = 772, count = 42 } = {}) {
+  const rng = rngFactory(hashSeed(`select-island-${dateStr}-${start}-${count}`));
+  const baseMachine = DUMMY_SELECT_MACHINES[Math.floor(rng() * DUMMY_SELECT_MACHINES.length)];
+
+  return Array.from({ length: count }, (_, i) => {
+    const machineNumber = start + i;
+    const laneBoost =
+      (i % 7 === 1 || i % 7 === 5 ? 0.12 : 0) +
+      (Math.floor(i / 7) === 2 ? 0.10 : 0);
+    const rawConfidence = 0.28 + rng() * 0.56 + laneBoost;
+    const confidence = Math.max(18, Math.min(96, Math.round(rawConfidence * 100)));
+    const borderDiff = Math.round(((confidence - 54) / 9 + (rng() - 0.5) * 1.4) * 10) / 10;
+    const evPerK = Math.round((borderDiff * 165 + (rng() - 0.5) * 120) / 10) * 10;
+
+    let verdict = "unknown";
+    if (confidence >= 76 && borderDiff >= 2.2) verdict = "strong";
+    else if (confidence >= 62 && borderDiff >= 0.8) verdict = "good";
+    else if (confidence >= 45 && borderDiff > -0.6) verdict = "watch";
+    else verdict = "avoid";
+
+    return {
+      id: `dummy-${machineNumber}`,
+      machineNumber,
+      machineName: baseMachine,
+      evPerK,
+      borderDiff,
+      confidence,
+      verdict,
+      source: "dummy",
+      isPlaying: i === 10 || i === 27,
+      sampleRot: 180 + Math.round(rng() * 1180),
+      lastSignal: rng() > 0.5 ? "前日回転率" : "島平均との差",
+    };
+  });
+}
