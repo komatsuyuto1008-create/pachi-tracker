@@ -1,6 +1,6 @@
 # HANDOVER.md — Pachi Tracker 引き継ぎドキュメント
 
-最終更新: 2026-05-19（Phase 6 ハンターランク本実装：複数XPトリガー・レベルアップトースト・通知ログ・通知ベル本実装）
+最終更新: 2026-05-19（Phase 6 バッジ解放 + 判定変化通知 実装完了：12種バッジ・解放判定・設定画面一覧・NOTIF_BADGE_UNLOCKED / NOTIF_VERDICT_CHANGE 発火）
 
 ---
 
@@ -60,12 +60,15 @@ src/
       selectSelectors.js
       __tests__/
         selectSelectors.test.mjs
-    hunter/                     # ハンターランク（Phase 6 本実装版）
+    hunter/                     # ハンターランク（Phase 6 本実装版 + バッジ解放）
       hunterRank.js             # 純関数（XP加算・レベル導出・マイグレーション・連続日数）
       HunterRankBadge.jsx       # 設定モードトップに表示するバッジ
       LevelUpToast.jsx          # レベルアップ時の控えめなトースト（Phase 6）
+      badges.js                 # バッジ定義 + 純関数（computeBadgeMetrics / evaluateBadgeUnlocks / unlockBadges）
+      BadgeList.jsx             # 設定モード内のバッジ一覧UI（獲得/未獲得）
       __tests__/
         hunterRank.test.mjs
+        badges.test.mjs         # バッジ解放テスト 20 件
   __tests__/
     protected-fns.mjs           # 保護関数境界値ハーネス
     baseline.json               # 完全一致テスト基準値
@@ -107,7 +110,16 @@ docs/
     - `resetAll` で countedHits/countedRotKilo を 0 にリセット（次セッションは新規に数え直す）
   - `notificationLog` — 通知ログ（Phase 6）。`useLS("pt_notificationLog", [])`
     - 先頭が最新、最大 50 件（`NOTIFICATION_LOG_MAX`）
-    - 種別: `NOTIF_LEVEL_UP` / `NOTIF_XP_GAINED` / `NOTIF_STREAK` / `NOTIF_VERDICT_CHANGE`
+    - 種別: `NOTIF_LEVEL_UP` / `NOTIF_XP_GAINED` / `NOTIF_STREAK` / `NOTIF_VERDICT_CHANGE` / `NOTIF_BADGE_UNLOCKED`
+  - `hunterRank.unlockedBadges` — 獲得済みバッジ ID 配列（Phase 6 バッジ解放）
+    - 12 種: `first_jp` / `sessions_10` / `sessions_50` / `lv5` / `lv10` / `lv25` / `xp_10k` / `streak_3` / `streak_7` / `streak_30` / `rot_10k` / `jp_100`
+    - 解放判定は `App.jsx` の useEffect で `rank.level / totalXp / streakDays / archives.length / totalHits / ev.netRot` を監視
+    - 解放時に `unlockBadges(rank, ids)` で `BADGES` 定義順に並び替えて追加 + `NOTIF_BADGE_UNLOCKED` 通知発火
+    - 未知 ID は末尾保持（将来互換）
+  - 判定変化通知 — `App.jsx` 内 `prevVerdictRef` + `lastVerdictNotifyRef` で観測
+    - verdict 変化時に `NOTIF_VERDICT_CHANGE` を発火（`{prev}→{new}` の日本語ラベル付き）
+    - 同 verdict への 5 分以内の往復はノイズ抑制（`VERDICT_NOTIFY_COOLDOWN_MS`）
+    - `sessionStarted=false` でリセット、初回観測（prev=null）は基準値登録のみ
 
 ### 2-3. 計算精度問題①：ラベルとウィザード順序（✅ 解決済み）
 
@@ -183,8 +195,9 @@ docs/
 | 4 | ✅ 完了（ダミー） | 台選びモード（ホール図面風ヒートマップ＋良台TOP5）。`SelectDashboard` + `selectSelectors` + ダミー島データ | PR #184・#185・#186 |
 | 5 | ⏸️ 未着手 | P-EVIDENCE 移植（GAS → JS）。**GAS 数式の共有が必須** | ー |
 | 6 (1.5 先行投入) | ✅ 完了 | ハンターランク簡易版（`pt_hunterRank` + `HunterRankBadge`）。XP加算は「セッション完了 +50」のみ | PR #189（マージ済み） |
-| 6（本実装） | ✅ 完了 | 複数XPトリガー（大当たり +20・回転1000ごと +10・7日連続 +100）、レベルアップトースト、`pt_notificationLog` + `NotificationPanel`、通知ベル本実装（未読件数バッジ） | ブランチ: `claude/hunting-system-handover-KmslM` |
-| 6（バッジ解放） | ⏸️ 未着手 | `unlockedBadges` の活用、特定マイルストーン達成バッジ表示 | ー |
+| 6（本実装） | ✅ 完了 | 複数XPトリガー（大当たり +20・回転1000ごと +10・7日連続 +100）、レベルアップトースト、`pt_notificationLog` + `NotificationPanel`、通知ベル本実装（未読件数バッジ） | PR #190（マージ済み） |
+| 6（バッジ解放） | ✅ 完了 | 12種バッジ定義（Lv/累計EXP/連続日数/累計回転/累計大当たり/セッション数）、`unlockedBadges` 配列の活用、設定モード内バッジ一覧UI、`NOTIF_BADGE_UNLOCKED` 通知 | ブランチ: `claude/hunting-system-continue-U0yhI` |
+| 6（判定変化通知） | ✅ 完了 | `evDecision` の verdict 変化を `prevVerdictRef` で観測、5分以内の同 verdict 往復は抑制、`NOTIF_VERDICT_CHANGE` 通知 | ブランチ: `claude/hunting-system-continue-U0yhI` |
 | 7 | ⏸️ 未着手 | モード連携・半自動切替・全体調整 | ー |
 
 #### Phase 関連の新規ファイル
@@ -382,7 +395,9 @@ if (evAdj < -50 || bDiff < -1.0)                      → "stop"
 - ✅ 狩猟型UX Phase 4 - 台選びモード（ホール図面風ヒートマップ + 良台TOP5、ダミー）（PR #184・#185・#186）
 - ✅ 大当たり後フロー サブステップ4・5（`calcPreciseEV` 実測ベース netGain 分岐 + baseline.json 再生成）（PR #188）
 - ✅ Phase 6 簡易先行投入版（ハンターランク `pt_hunterRank` + `HunterRankBadge`、PR #189）
-- ✅ Phase 6 本実装：複数XPトリガー（大当たり/回転1000/連続日数）・`addXpWithLevelUp`・`applyDailyStreak`・レベルアップトースト・`pt_notificationLog` + `NotificationPanel`・通知ベル本実装（本ブランチ `claude/hunting-system-handover-KmslM`）
+- ✅ Phase 6 本実装：複数XPトリガー（大当たり/回転1000/連続日数）・`addXpWithLevelUp`・`applyDailyStreak`・レベルアップトースト・`pt_notificationLog` + `NotificationPanel`・通知ベル本実装（PR #190）
+- ✅ Phase 6 バッジ解放：12種バッジ定義・`evaluateBadgeUnlocks` / `unlockBadges` / `computeBadgeMetrics` 純関数・`BadgeList` UI・`NOTIF_BADGE_UNLOCKED` 通知（本ブランチ `claude/hunting-system-continue-U0yhI`）
+- ✅ Phase 6 判定変化通知：`evDecision` の verdict 推移を `prevVerdictRef` で観測、5分以内の同 verdict 往復抑制、`NOTIF_VERDICT_CHANGE` 通知（本ブランチ `claude/hunting-system-continue-U0yhI`）
 
 ---
 
@@ -429,10 +444,12 @@ if (evAdj < -50 || bDiff < -1.0)                      → "stop"
 - **Phase 5**: P-EVIDENCE 移植
   - GAS スプレッドシートの数式群を **ユーザーから共有してもらうことが必須**
   - 共有まではインターフェース固定でダミー実装のまま進行可
-- **Phase 6 バッジ解放**: `unlockedBadges` 配列の活用
-  - 「初の Lv10 到達」「30日連続稼働」「累計1万回転」等のマイルストーンバッジ
-  - バッジ一覧画面（設定モード内）の設計と表示要素が必要
-- **Phase 6 残：判定変化通知**: `NOTIF_VERDICT_CHANGE` の発火条件設計（要ユーザー方針確認）
+- **Phase 6 バッジ解放**: ✅ 完了（本ブランチ）
+  - 12 種バッジ + 解放判定 + 設定画面一覧 + 通知
+  - 追加バッジ案（将来の拡張）: 「機種マスター（同一機種で N セッション）」「店舗エキスパート（同一店舗で N セッション）」「高仕事量達成（1セッション workAmount 上位）」など
+- **Phase 6 判定変化通知**: ✅ 完了（本ブランチ）
+  - verdict 推移検出 + 5 分往復抑制 + 通知発火
+  - 残課題候補: 「判定変化のトーストを実装するか」「ヤメ通知に振動・音を付けるか」などの演出強化（要ユーザー方針確認）
 - **Phase 7**: モード連携・半自動切替・全体調整
 
 ### 保留タスク4：偵察モードのダミー → 実データ切替
@@ -661,65 +678,70 @@ grep -n "XPトリガー" src/App.jsx
 
 # 通知ベル本実装（未読件数バッジ）
 grep -n "openNotificationPanel" src/components/Tabs.jsx
+
+# === Phase 6 バッジ解放 + 判定変化通知の確認 ===
+# バッジ定義 + 純関数
+ls src/components/hunter/badges.js
+
+# バッジ一覧 UI
+ls src/components/hunter/BadgeList.jsx
+
+# バッジ解放 useEffect（App.jsx）
+grep -n "バッジ解放" src/App.jsx
+
+# 判定変化通知 useEffect（App.jsx）
+grep -n "判定変化通知\|prevVerdictRef\|lastVerdictNotifyRef" src/App.jsx
+
+# 設定画面のバッジ一覧マウント
+grep -n "BadgeList" src/components/Tabs.jsx
 ```
 
-### 直近の状態サマリー（2026-05-19 時点、Phase 6 本実装完了後）
+### 直近の状態サマリー（2026-05-19 時点、Phase 6 バッジ解放 + 判定変化通知 完了後）
 
-- **main ブランチ最新コミット**: `2419dbf`（PR #189、Phase 6 ハンターランク簡易先行投入のマージ）
-- **作業ブランチ（push 未）**: `claude/hunting-system-handover-KmslM`
+- **main ブランチ最新コミット**: `16a3272`（PR #190、Phase 6 ハンターランク本実装のマージ）
+- **作業ブランチ（push 済 / PR 未作成）**: `claude/hunting-system-continue-U0yhI`
 - **本ブランチで追加**:
-  - `src/components/hunter/hunterRank.js`: `addXpWithLevelUp` / `applyDailyStreak` / `classifyStreakTransition` を追加。XP定数 `XP_JP_HIT=20` / `XP_ROT_1000=10` / `XP_STREAK_BONUS=100` を新規 export
-  - `src/components/hunter/LevelUpToast.jsx`: 控えめなレベルアップトースト（画面下部、2.5秒で自動消滅）
-  - `src/notifications.js`: 通知ログ純関数群（`makeNotification` / `addNotification` / `markAsRead` / `markAllAsRead` / `unreadCount` / `clearAll`）
-  - `src/components/NotificationPanel.jsx`: 通知ボトムシート。種別ごとのアイコン色、相対時刻表示、既読化操作
-  - `App.jsx`: `pt_hunterCounters` / `pt_notificationLog` 追加、`grantXp` ヘルパー、3つの useEffect トリガー（大当たり・回転1000・連続日数）、トースト/パネルのマウント、`S.openNotificationPanel` を S 経由で公開
-  - `Tabs.jsx`: 通知ベルを「直近イベントへスクロール」から「通知パネルを開く」に変更。未読件数バッジ（数値表示、99+ 上限）を追加
-  - 既存 `setHunterRank((prev) => addXp(prev, XP_SESSION_COMPLETE))` を `grantXp(XP_SESSION_COMPLETE, "セッション完了")` に置換
-  - `HunterRankBadge.jsx`: フッター注記を「セッション +50 / 大当たり +20 / 1000回転 +10 / 7日連続 +100」に更新
-  - `hunterRank.test.mjs`: `addXpWithLevelUp` / `classifyStreakTransition` / `applyDailyStreak` の境界値テスト 14 件を追加（33 件 PASS）
-- **ユーザー確認**: 2026-05-19、ホール図面風ヒートマップについて「確認しました。いい感じです。」と確認済み
-- **狩猟型UX**: Phase 0・1・1.B・1.5（モック視覚刷新）・1.6・1.7・1.8・2・3・4・6（簡易先行投入）・6本実装 完了。**次は Phase 4 の実データ化/スコアリング定義確定、Phase 5（P-EVIDENCE 移植）、Phase 6 バッジ解放、または Phase 7（モード連携）**
+  - `src/components/hunter/badges.js`: 12 種バッジ定義（first_jp / sessions_10 / sessions_50 / lv5 / lv10 / lv25 / xp_10k / streak_3 / streak_7 / streak_30 / rot_10k / jp_100）と純関数 `computeBadgeMetrics` / `evaluateBadgeUnlocks` / `unlockBadges` / `getBadgeById`
+  - `src/components/hunter/BadgeList.jsx`: 設定モード内のバッジ一覧 UI（2列グリッド、獲得済みは彩色＋アイコン強調、未獲得はグレースケール + 条件文）
+  - `src/components/hunter/__tests__/badges.test.mjs`: 20 件 PASS（条件評価・遡及加算・順序安定化・未知 ID 互換性）
+  - `src/notifications.js`: `NOTIF_BADGE_UNLOCKED` 種別を追加
+  - `src/components/NotificationPanel.jsx`: バッジ獲得通知のアイコン色（紫）を追加
+  - `src/components/Tabs.jsx`: 設定モードトップにバッジ一覧セクションを追加（`HunterRankBadge` の直下）
+  - `App.jsx`:
+    - バッジ解放 useEffect（`hunterRank.level / totalXp / streakDays / archives.length / totalHits / ev.netRot` を監視 → `evaluateBadgeUnlocks` → `unlockBadges` 適用 + `NOTIF_BADGE_UNLOCKED` 通知）
+    - 判定変化通知 useEffect（`prevVerdictRef` + `lastVerdictNotifyRef` で `decision.verdict` 推移を観測。`VERDICT_NOTIFY_COOLDOWN_MS = 5 * 60 * 1000`。`sessionStarted=false` でリセット）
+    - 通知本文用ヘルパー `verdictLabel` / `verdictBodyText` を module レベルに追加
+    - `useRef` import 追加、`evDecision` import 追加、`NOTIF_BADGE_UNLOCKED` / `NOTIF_VERDICT_CHANGE` import 追加
+- **狩猟型UX**: Phase 0・1・1.B・1.5・1.6・1.7・1.8・2・3・4・6（簡易先行投入）・6本実装・6バッジ解放・6判定変化通知 完了。**次は Phase 4 の実データ化/スコアリング定義確定、Phase 5（P-EVIDENCE 移植）、または Phase 7（モード連携）**
 - **配色**: モック2準拠のブルー寄りダークネイビーに刷新済み（PR #177）
 - **判定バッジ**: 大型化＋円形試行充足率リング、各種表示バグ修正済み（PR #174・#175・#176）
 - **実戦タブ**: 判断 + 回転入力を統合（Phase 1.B、PR #173）。クイック入力 +1/+5/+10/+25 は廃止、テンキーは bottom sheet 化
 - **PWA**: `registerType: prompt` + ボトムシート形式の更新バナー（PR #166・#167・#168）
 - **上皿補正**: Step 1〜3 完了。Step 2b で判断ロジックも補正後の値を使用
 - **大当たり後フロー**: サブステップ1〜5 完了（PR #188）。サブステップ6以降は保留
-- **ハンターランク**: Phase 6 本実装完了。XPトリガー4種類、レベルアップトースト、通知ログ・通知パネル稼働中
+- **ハンターランク**: Phase 6 本実装 + バッジ解放 + 判定変化通知すべて完了。XPトリガー4種類、レベルアップトースト、12種バッジ、verdict 変化通知、通知ログ・通知パネル稼働中
 - **既存バグ修正**: 現金カード 0円（PR #160）、履歴削除（PR #155）、`FlowStatusCard` 表示（PR #170）
 
 ### 次にやることの候補（優先順）
 
 着手前に**必ずユーザーに方針確認**すること。以下は推奨順。
 
-#### 候補A：狩猟型UX Phase 6 バッジ解放（残タスク）
+#### ✅ 完了済み：Phase 6 バッジ解放（本ブランチで実装）
 
-理由：Phase 6 本実装で XPトリガー・トースト・通知ログ・通知ベルまで実装済み。残るは `unlockedBadges` 配列の活用とバッジ一覧 UI のみ。
+12 種バッジ + `evaluateBadgeUnlocks` 純関数 + `BadgeList` UI + `NOTIF_BADGE_UNLOCKED` 通知まで完成。
+次の拡張案（要ユーザー方針確認）:
+- 機種マスター / 店舗エキスパート（同一機種・店舗で N セッション完走）
+- ハイスコアバッジ（1セッション workAmount 上位）
+- バッジ解放トースト（現在は通知ログのみ）
 
-実装内容：
-1. バッジ定義の決定（例: `{ id, label, icon, condition: rank => boolean }`）
-   - 「Lv10 到達」「Lv25 到達」「累計 10000 EXP」「30日連続稼働」「累計 100 大当たり」等
-2. バッジ解放判定（XP加算時／日次ストリーク判定後にチェック）
-3. 設定モード内のバッジ一覧表示（既獲得 / 未獲得 + 達成条件）
-4. バッジ解放時の通知（`NOTIF_BADGE_UNLOCKED` 種別を追加）
+#### ✅ 完了済み：Phase 6 判定変化通知（本ブランチで実装）
 
-要ユーザー方針確認：
-- 解放条件の難易度バランス（最初のバッジが取りやすいか）
-- バッジ一覧の表示優先度（設定モード内 vs 専用画面）
+`prevVerdictRef` + `lastVerdictNotifyRef` で verdict 推移を観測、5 分以内の同 verdict 往復を抑制、`NOTIF_VERDICT_CHANGE` 通知を発火。
+残課題候補:
+- ヤメ通知の演出強化（振動・音 — 要ユーザー方針確認、業務端末感とのトレードオフ）
+- 判定変化のトースト表示（現在は通知ログのみ）
 
-#### 候補B：判定変化通知の本実装
-
-理由：通知ログの種別 `NOTIF_VERDICT_CHANGE` は予約済みだが、発火ロジック未実装。実戦中に判定が「続行→様子見」等に変わったタイミングで通知することで、ユーザーの撤退判断を支援できる。
-
-実装内容：
-1. 判定 verdict の前回値を `useRef` で記憶
-2. verdict 変化検出時に `makeNotification(NOTIF_VERDICT_CHANGE, ...)` を発火
-3. 連続通知の抑制（同じ verdict への 5分以内の往復はノイズ）
-
-要ユーザー方針確認：
-- 通知頻度のしきい値（毎回 vs 5分 vs 大きな変化のみ）
-
-#### 候補C：狩猟型UX Phase 4 の実データ化・スコアリング定義
+#### 候補A：狩猟型UX Phase 4 の実データ化・スコアリング定義
 
 理由：UI はホール図面風マップとしてダミーデータで実装済み。ただし良台スコアリング定義と島データ構造は未確定。
 
@@ -728,7 +750,7 @@ grep -n "openNotificationPanel" src/components/Tabs.jsx
 - 「島平均」「前日実績」の集計定義
 - 島の物理隣接情報の必要性（当面は線形配置で代替可）
 
-#### 候補D：狩猟型UX Phase 5（P-EVIDENCE 移植）
+#### 候補B：狩猟型UX Phase 5（P-EVIDENCE 移植）
 
 **前提**: GAS スプレッドシートの数式群を**ユーザーから共有してもらうことが必須**（未受領）。
 
@@ -737,7 +759,7 @@ grep -n "openNotificationPanel" src/components/Tabs.jsx
 - 入出力：`{ trueBorder, posteriorMean, trialSufficiency, evAdjusted, scoreForRanking, reasons, predictedRotToConfidence40 }`
 - `src/__tests__/evidence.test.mjs` 新規
 
-#### 候補E：偵察モードのダミー → 実データ切替
+#### 候補C：偵察モードのダミー → 実データ切替
 
 「店舗実績」タブのみ既存 `archives` から店舗別集計で本実装可能。
 「本日予測」「イベント」タブは Phase 5 完了後に保留。
