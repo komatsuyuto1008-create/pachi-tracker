@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useLS, calcPreciseEV } from "./logic";
 import { useUndoStack } from "./history";
 import { C, font, tsNow } from "./constants";
@@ -20,6 +20,12 @@ import {
 import LevelUpToast from "./components/hunter/LevelUpToast";
 import NotificationPanel from "./components/NotificationPanel";
 import {
+  computeBadgeMetrics,
+  evaluateBadgeUnlocks,
+  unlockBadges,
+} from "./components/hunter/badges";
+import { evDecision } from "./components/decision/evDecision";
+import {
   addNotification as appendNotification,
   makeNotification,
   markAsRead as markNotifAsRead,
@@ -27,6 +33,8 @@ import {
   clearAll as clearNotifAll,
   NOTIF_LEVEL_UP,
   NOTIF_STREAK,
+  NOTIF_BADGE_UNLOCKED,
+  NOTIF_VERDICT_CHANGE,
 } from "./notifications";
 import { takeSnapshot, takeSnapshotImmediate, getLatest as getLatestSnapshot } from "./snapshot";
 
@@ -38,6 +46,26 @@ const LEGACY_TAB_TO_MODE = {
   calendar: "analysis",
   settings: "settings",
 };
+
+// verdict ID を日本語ラベルに変換（通知本文用）
+const VERDICT_LABELS = {
+  continue_strong: "続行",
+  continue: "続行",
+  hold: "様子見",
+  stop: "ヤメ",
+};
+function verdictLabel(v) {
+  return VERDICT_LABELS[v] || String(v || "");
+}
+function verdictBodyText(decision) {
+  if (!decision) return "";
+  const ev = Number(decision.evAdjusted);
+  const conf = Number(decision.confidence);
+  const parts = [];
+  if (Number.isFinite(ev)) parts.push(`EV/K ${ev >= 0 ? "+" : ""}${Math.round(ev)}円`);
+  if (Number.isFinite(conf)) parts.push(`信頼度 ${Math.round(conf * 100)}%`);
+  return parts.join(" / ");
+}
 
 const COLOR_THEMES = [
   { id: "purple",   gradient: "linear-gradient(135deg,#667eea,#764ba2)", primary: "#667eea" },
@@ -329,6 +357,86 @@ export default function App() {
       }));
     }
   }, [hasActivityToday, hunterRankMigrated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Phase 6 バッジ解放：レベル・連続日数・累計回転/大当たり/セッション数を監視 ──
+  // 各 metrics の変化時に未解放のバッジ条件を評価し、成立分を unlockedBadges に追加 + 通知。
+  // 既存ユーザーのマイグレーション直後にも一斉に解放判定が走る（既存実績への遡及付与）。
+  const lifetimeRotForBadge = Math.max(0, Math.floor(Number(ev?.netRot) || 0));
+  useEffect(() => {
+    if (!hunterRankMigrated) return;
+    const metrics = computeBadgeMetrics({
+      rank: hunterRank,
+      hunterCounters,
+      archives,
+      jpLog,
+      ev,
+    });
+    const newly = evaluateBadgeUnlocks(metrics, hunterRank?.unlockedBadges || []);
+    if (newly.length === 0) return;
+    setHunterRank((prev) => unlockBadges(prev, newly.map((b) => b.id)));
+    for (const b of newly) {
+      pushNotification(makeNotification(NOTIF_BADGE_UNLOCKED, {
+        title: `バッジ獲得：${b.label}`,
+        body: b.description,
+        payload: { badgeId: b.id },
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    hunterRankMigrated,
+    hunterRank?.level,
+    hunterRank?.totalXp,
+    hunterCounters?.streakDays,
+    archives?.length,
+    totalHits,
+    lifetimeRotForBadge,
+  ]);
+
+  // ── Phase 6 判定変化通知：実戦タブの verdict 推移を観測し、変化時に通知 ──
+  // 同じ verdict への 5 分以内の往復はノイズとして抑制する。
+  // ガード:
+  //   - マイグレーション未完了は無視（初回起動直後の連発を防ぐ）
+  //   - セッション未開始は無視（無稼働時の "stop" 連発を防ぐ）
+  //   - prev が null の初回観測は基準値登録のみで通知しない
+  const decision = evDecision(ev);
+  const prevVerdictRef = useRef(null);
+  const lastVerdictNotifyRef = useRef({});
+  const VERDICT_NOTIFY_COOLDOWN_MS = 5 * 60 * 1000;
+  useEffect(() => {
+    // セッション終了で基準を完全リセット（次セッションは初回観測扱い）
+    if (!sessionStarted) {
+      prevVerdictRef.current = null;
+      lastVerdictNotifyRef.current = {};
+    }
+  }, [sessionStarted]);
+  useEffect(() => {
+    if (!hunterRankMigrated) return;
+    if (!sessionStarted) return;
+    const newV = decision?.verdict;
+    if (!newV) return;
+    const prevV = prevVerdictRef.current;
+    if (prevV === newV) return;
+    if (prevV === null) {
+      prevVerdictRef.current = newV;
+      return;
+    }
+    const now = Date.now();
+    const lastNotifiedTs = Number(lastVerdictNotifyRef.current[newV]) || 0;
+    if (now - lastNotifiedTs < VERDICT_NOTIFY_COOLDOWN_MS) {
+      // 抑制対象でも prev は更新しておかないと、次の本物の変化を取りこぼす
+      prevVerdictRef.current = newV;
+      return;
+    }
+    prevVerdictRef.current = newV;
+    lastVerdictNotifyRef.current = { ...lastVerdictNotifyRef.current, [newV]: now };
+    pushNotification(makeNotification(NOTIF_VERDICT_CHANGE, {
+      title: `判定が「${verdictLabel(prevV)}」→「${verdictLabel(newV)}」に変化`,
+      body: verdictBodyText(decision),
+      payload: { from: prevV, to: newV, evAdjusted: decision?.evAdjusted },
+    }));
+    // decision を deps に含めると毎レンダで参照変化するため verdict のみ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decision?.verdict, hunterRankMigrated, sessionStarted]);
 
   // ── Undo/Redo（直近10操作分のセッション中スナップショット） ──
   const getUndoSnapshot = useCallback(() => ({
