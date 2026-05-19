@@ -1,6 +1,6 @@
 # HANDOVER.md — Pachi Tracker 引き継ぎドキュメント
 
-最終更新: 2026-05-15
+最終更新: 2026-05-19
 
 ---
 
@@ -22,29 +22,46 @@
 ```
 src/
   logic.js                      # 計算ロジック心臓部（純粋関数群）
-  App.jsx                       # 状態一元管理（useState / useLS）
+  App.jsx                       # 状態一元管理（useState / useLS）+ モードルーター
   machineDB.js                  # 機種マスタ（displayToReal フィールド含む）
   persistence.js                # IndexedDB(Dexie) バック memCache
   db.js                         # Dexie DB 定義
   snapshot.js                   # セッション復元保証
+  dummyData.js                  # 偵察モード等のダミーデータ生成
+  constants.js                  # 配色 C / フォント / ヘルパー
+  index.css                     # ダークネイビー配色（モック2準拠）
   components/
     Atoms.jsx                   # 共通UIパーツ
-    Tabs.jsx                    # タブナビゲーション（メイン処理ほぼここ）
+    Tabs.jsx                    # 記録モード内の主要UI（実戦タブ統合済み）
+    ModeTabBar.jsx              # フッター5タブ（偵察/台選び/記録/分析/設定）
+    ModePlaceholder.jsx         # 未実装モード（台選び）のプレースホルダー
     decision/
       evDecision.js             # 判断ロジック（純粋関数）
-      DecisionTab.jsx           # 判断ファーストUI コンテナ
-      VerdictBadge.jsx          # 判断バッジ
+      DecisionTab.jsx           # 判断UI コンテナ（実戦タブ内に統合）
+      VerdictBadge.jsx          # 判定バッジ（大型化・円形信頼度リング）
       ConfidenceBar.jsx         # 信頼度バー
       KeyMetrics.jsx            # 主要指標カード
       ReasonList.jsx            # 判断根拠リスト
+      RecentEventList.jsx       # 直近イベント表示（Phase 1.7）
       __tests__/
         evDecision.test.mjs     # 判断ロジックテスト
+    scout/                      # 偵察モード（Phase 3）
+      ScoutDashboard.jsx
+      StoreRankingCard.jsx
+      TodayHighlightList.jsx
+      scoutSelectors.js
+    analysis/                   # 分析モード（Phase 2）
+      AnalysisDashboard.jsx
+      analysisSelectors.js
+    select/                     # 台選びモード（Phase 4、未実装）
   __tests__/
     protected-fns.mjs           # 保護関数境界値ハーネス
     baseline.json               # 完全一致テスト基準値
 docs/
   HANDOVER.md                   # 本ファイル
   decision-ui-design.md         # 判断ファーストUI 設計書
+  roadmap-mockup-impl.md        # モックアップ完全再現ロードマップ（先行書）
+  roadmap-hunter-ux.md          # 狩猟型UX進化ロードマップ（Phase 0〜7、上位ガイド）
 ```
 
 ### 2-2. 状態管理
@@ -55,10 +72,14 @@ docs/
 - `rotRows` が回転数の唯一の真実源（SSoT）
 - 主要な状態:
   - `rotRows` / `startRot` — 回転入力データ
-  - `jpLog` — 大当たり記録（v3チェーン構造）
+  - `jpLog` — 大当たり記録（v3チェーン構造、`finalRealBalls` / `pushAmount` 追加済み）
   - `rentBalls` / `exRate` / `synthDenom` / `rotPerHour` / `border` — 設定
   - `spec1R` / `specAvgRounds` / `specSapo` — 機種スペック
   - `totalTrayBalls` — 上皿玉補正用
+  - `currentMode` — フッター5タブの現在モード（`useLS("pt_currentMode", "record")`）
+    - 取りうる値: `"scout" | "select" | "record" | "analysis" | "settings"`
+    - `App.jsx:465-476` で `currentMode` ごとに対応コンポーネントを切替
+    - 既存の `sessionSubTabs` は記録モード内の下位タブとして継続使用
 
 ### 2-3. 計算精度問題①：ラベルとウィザード順序（✅ 解決済み）
 
@@ -116,7 +137,56 @@ docs/
 - 調査レポート: ブランチ `claude/investigate-jackpot-flow-IXTu2` 内
 - 影響ファイル一覧: 調査レポート末尾「参照ファイル・行番号サマリー」を参照
 
-### 2-6. 完了した追加機能
+### 2-6. 狩猟型UX進化（Phase 0〜3 進行中）
+
+`docs/roadmap-hunter-ux.md` の 8 段階ロードマップを基準に進行中。
+モード切替は `App.jsx:465` の `currentMode` 分岐で管理。
+
+| Phase | 状態 | 内容 | コミット / PR |
+|---|------|------|---|
+| 0 | ✅ 完了 | 5タブのモード切替フッター導入。`pt_currentMode` 状態追加、`ModeTabBar` 新規 | `bae1cfe` / PR #179 |
+| 1 | ✅ 完了 | モックアップ準拠の判断UI視覚刷新（全7サブステップ） | `72cfefb` / PR #172 |
+| 1.B | ✅ 完了 | 判断タブと回転入力タブを実戦タブに統合（クイック入力 +1/+5/+10/+25 廃止、テンキーをbottom sheet化） | `979f9f2` / PR #173 |
+| 1.5 | ✅ 完了 | 判定バッジの大型化＋円形試行充足率リング | `42f6b85` / PR #176 |
+| 1.6 | ✅ 完了 | モックアップ2準拠のダークネイビー配色刷新 | `1cae238` / PR #177 |
+| 1.7 + 1.8 | ✅ 完了 | 記録モードに直近イベント表示（`RecentEventList`）と通知ベル/歯車ショートカット追加 | `702a932` / PR #180 |
+| 2 | ✅ 完了 | 分析モードを収支分析ダッシュボード（`AnalysisDashboard` + `analysisSelectors`）に刷新 | `5de0c86` / PR #181 |
+| 3 | ✅ 完了 | 偵察モードを店舗ランキング画面（`ScoutDashboard` + ダミーデータ）に刷新 | `b5dc141` / PR #182 |
+| 4 | ⏸️ 未着手 | 台選びモード（ヒートマップ＋良台TOP5）。`ModePlaceholder` 表示中 | ー |
+| 5 | ⏸️ 未着手 | P-EVIDENCE 移植（GAS → JS）。**GAS 数式の共有が必須** | ー |
+| 6 | ⏸️ 未着手 | ハンターランク・通知 | ー |
+| 7 | ⏸️ 未着手 | モード連携・半自動切替・全体調整 | ー |
+
+#### Phase 関連の新規ファイル
+
+- `src/components/ModeTabBar.jsx` — フッター5タブ
+- `src/components/ModePlaceholder.jsx` — 未実装モード（select）プレースホルダー
+- `src/components/decision/RecentEventList.jsx` — 直近イベント（`jpLog` + `sesLog` をマージ）
+- `src/components/scout/` — 偵察モード一式（`ScoutDashboard`, `StoreRankingCard`, `TodayHighlightList`, `scoutSelectors.js`）
+- `src/components/analysis/` — 分析モード一式（`AnalysisDashboard`, `analysisSelectors.js`）
+- `src/dummyData.js` — `getDummyStoreRanking`, `getDummyHighlights`, `todayKey`, `timeLabel`
+
+#### 配色変更（PR #177）
+
+`src/index.css` の CSS 変数を「ブルー寄りダークネイビー」に統一。
+ダーク／ライト両テーマで `--bg`, `--surface`, `--accent` 等を再定義。
+`src/constants.js` の `C.*` は `var(--*)` への参照なので、新色は CSS 側を編集すれば全コンポーネントに伝播する。
+
+#### モード切替ロジック（App.jsx:465-476 抜粋）
+
+```jsx
+{currentMode === "scout"    && <ScoutDashboard S={S} />}
+{currentMode === "select"   && <ModePlaceholder mode="select" />}
+{currentMode === "record"   && <RotTab border={border} rows={rotRows} setRows={setRotRows} S={S} ev={ev} />}
+{currentMode === "analysis" && <AnalysisDashboard S={S} ... />}
+{currentMode === "settings" && <SettingsTab s={S} onReset={resetAll} />}
+<ModeTabBar currentMode={currentMode} onChange={setCurrentMode} />
+```
+
+`logic.js` / `baseline.json` / `evDecision.js` はこの Phase 全期間で**不変**。
+全変更は UI 層・新規セレクタ・ダミーデータ層のみ。
+
+### 2-7. 完了した追加機能
 
 #### プッシュ補正Step（✅ PR #161 マージ済み）
 
@@ -145,6 +215,38 @@ docs/
 - **問題**: 「最新履歴を削除」ボタンが持ち玉・上皿玉を巻き戻していなかった
 - **修正**: 長押し削除と同等の処理に統一
 - コミット: `ea3a122`
+
+#### Codex プロトタイプ統合 + 上皿補正の判断UI反映（✅ PR #165 マージ済み）
+
+- Codex 製プロトタイプを取り込み、判断UIで補正後値を確実に使うよう統一
+- `CLAUDE.md` に「UI開発フェーズの分離ルール」を追記（コミット `117c136`）
+
+#### PWA 更新フロー修正（✅ PR #166・#167・#168 マージ済み）
+
+- **問題**: vite-plugin-pwa の `registerType: autoUpdate` ではUIが更新されない
+- **修正**: `registerType: prompt` に変更し、更新バナーをボトムシート形式に統一
+- 関連コミット: `6480867`, `30b408a`, `7a5c922`
+
+#### 新規稼働画面の刷新（✅ PR #168 マージ済み）
+
+- 機種未選択時の画面を空状態 + ピル形ボタンに刷新
+- 機種選択をボトムシートに切替（片手操作性向上）
+- コミット: `ae19b48`
+
+#### 連チャン入力ウィザード表示修正（✅ PR #170 マージ済み）
+
+- `FlowStatusCard` が flex コンテナ内で縮んで隠れる問題を修正
+- コミット: `a6f9e42`
+
+#### 判定バッジ「ヤメ」表示修正（✅ PR #175 マージ済み）
+
+- 太字日本語フォントメトリクスで上下クリップされる問題を修正
+- コミット: `a7861b2`
+
+#### 判定バッジのコンパクト化（✅ PR #174 マージ済み）
+
+- 入力シートとバッジの重なり修正、サイズ調整
+- コミット: `8801373`
 
 ---
 
@@ -213,7 +315,7 @@ if (evAdj < -50 || bDiff < -1.0)                      → "stop"
 
 ## 5. 直近のタスク
 
-### 完了済み（直近）
+### 完了済み（〜2026-05-15）
 
 - ✅ 計算精度問題①（ラベルとウィザード順序）解決（PR #147）
 - ✅ 判断ファーストUI 実装（PR #144〜#146）
@@ -221,12 +323,29 @@ if (evAdj < -50 || bDiff < -1.0)                      → "stop"
 - ✅ protected-fns.mjs 修復（PR #149）
 - ✅ baseline.json 再生成（PR #150）
 - ✅ 履歴削除バグ修正（PR #155）
-- ✅ 大当たり後フロー サブステップ1（PR #156）
-- ✅ 大当たり後フロー サブステップ2（PR #158）
-- ✅ 大当たり後フロー サブステップ3（PR #159）
+- ✅ 大当たり後フロー サブステップ1〜3（PR #156・#158・#159）
 - ✅ 現金カード 0円表示バグ修正（PR #160）
 - ✅ プッシュ補正Step 追加（PR #161）
 - ✅ 初当たり回転数必須化（PR #162）
+
+### 完了済み（2026-05-15〜2026-05-19、本期間）
+
+- ✅ Codex プロトタイプ統合 + 上皿補正の判断UI反映（PR #165）
+- ✅ PWA 更新バナー修正一式（PR #166・#167・#168）
+- ✅ 新規稼働画面の空状態+ピル形ボタン刷新、機種選択のボトムシート化（PR #168）
+- ✅ 連チャン入力ウィザード `FlowStatusCard` 表示修正（PR #170）
+- ✅ モックアップ完全再現ロードマップ追加（PR #171）
+- ✅ モックアップ準拠の判断UI視覚刷新（Phase 1 全7サブステップ、PR #172）
+- ✅ 判断タブと回転入力タブを実戦タブに統合（Phase 1.B、PR #173）
+- ✅ 判定バッジのコンパクト化と入力シートの重なり修正（PR #174）
+- ✅ 判定バッジ「ヤメ」表示問題修正（PR #175）
+- ✅ 判定バッジ大型化＋円形試行充足率リング（PR #176）
+- ✅ ブルー寄りダークネイビー配色刷新（PR #177）
+- ✅ 狩猟型UX進化ロードマップ追加（PR #178）
+- ✅ 狩猟型UX Phase 0 - 5タブのモード切替フッター（PR #179）
+- ✅ 狩猟型UX Phase 1.7+1.8 - 直近イベント表示と通知ベル/歯車（PR #180）
+- ✅ 狩猟型UX Phase 2 - 分析モード（収支分析ダッシュボード）（PR #181）
+- ✅ 狩猟型UX Phase 3 - 偵察モード（店舗ランキング画面、ダミーデータ）（PR #182）
 
 ---
 
@@ -247,7 +366,8 @@ if (evAdj < -50 || bDiff < -1.0)                      → "stop"
 - 案A: 持ち玉モード中は補正をスキップ
 - 案C（推奨）: 補正を現金K分のみに限定（業務的に最も正確）
 
-**対応方針**: 他タスクが落ち着いたら改めて判断。
+**対応方針**: ロードマップ Phase 5（P-EVIDENCE 移植）の冒頭で吸収する案を推奨。
+他タスクが落ち着いたら改めて判断。
 
 ### 保留タスク2：大当たり後フロー サブステップ4以降
 
@@ -256,6 +376,32 @@ if (evAdj < -50 || bDiff < -1.0)                      → "stop"
 - フォールバック → 旧データは液晶ベース（後方互換）
 
 **サブステップ5〜8**: 調査レポート参照（ブランチ: `claude/investigate-jackpot-flow-IXTu2`）
+
+**重要**: ロードマップ Phase 5（P-EVIDENCE 移植）は実測ベースの netGain を必要とする。
+Phase 5 着手前に **サブステップ4・5 を独立 PR で先行消化**することが望ましい。
+
+### 保留タスク3：狩猟型UX Phase 4 以降
+
+`docs/roadmap-hunter-ux.md` 参照。次に着手すべきは以下のいずれか：
+
+- **Phase 4**: 台選びモード（ヒートマップ + 良台TOP5）
+  - 現状は `ModePlaceholder` を表示
+  - 良台スコアリングの定義式・「島平均」「前日実績」の集計定義が**未確定**（要ユーザー確認）
+- **Phase 5**: P-EVIDENCE 移植
+  - GAS スプレッドシートの数式群を **ユーザーから共有してもらうことが必須**
+  - 共有まではインターフェース固定でダミー実装のまま進行可
+- **Phase 6**: ハンターランク・通知
+- **Phase 7**: モード連携・半自動切替・全体調整
+
+### 保留タスク4：偵察モードのダミー → 実データ切替
+
+`src/components/scout/ScoutDashboard.jsx` は現在 `dummyData.js` の `getDummyStoreRanking` を使用。
+実データ化には:
+
+- `pt_storeRanking` キーの追加（`useLS`）
+- 「店舗実績」タブは既存 `archives` から店舗別集計で実装可能
+- 「本日予測」タブは Phase 5（P-EVIDENCE）完了後に実データ化
+- 「イベント」タブのデータソースは**未定**
 
 ---
 
@@ -311,34 +457,49 @@ node src/components/decision/__tests__/evDecision.test.mjs
 
 ## 8. ブランチ運用
 
-### 直近 25 コミット（2026-05-15 時点、origin/main）
+### 直近の主要コミット（〜2026-05-19、origin/main）
 
 ```
-4c1dc4d Merge pull request #162 from komatsu-dev-jp/claude/jackpot-rot-required-LVyT0
-ea4a58f fix(rot): 初当たり時の回転数入力を必須化、netRot に正しく反映
-10ae5c9 Merge pull request #161 from komatsu-dev-jp/claude/push-amount-correction-mJyAc
-56f2852 feat(ui): 初当たりウィザードに直近のプッシュ額補正Stepを追加
-b0718df Merge pull request #160 from komatsu-dev-jp/claude/fix-cash-card-zero-DxY3p
-e3fb771 fix(ui): 現金カードに rotRows から計算した正しい投資額を表示
-9df0fa2 Merge pull request #159 from komatsu-dev-jp/claude/jackpot-flow-substep3-LPtw0
-f888737 feat(ui): ラッシュ終了時に最終実測持ち玉入力Stepを追加 (サブステップ3)
-2b3ce2a Merge pull request #158 from komatsu-dev-jp/claude/jackpot-flow-substep2-nd2XC
-e38e16f feat(chain): chain オブジェクトに finalRealBalls フィールドを追加 (サブステップ2)
-b944e50 Merge pull request #157 from komatsu-dev-jp/claude/update-handover-jackpot-flow-KWvVk
-a4e2356 docs: HANDOVER.md を更新（大当たり後フロー再設計・上皿補正完了・Codex引き継ぎ）
-374e722 Merge pull request #156 from komatsu-dev-jp/claude/jackpot-flow-substep1-KYCUw
-0f32101 feat(machineDB): displayToReal フィールドを全機種に追加 (サブステップ1)
-8d95c63 Merge pull request #155 from komatsu-dev-jp/claude/fix-history-delete-balls-Xp0et
-ea3a122 fix(history): 最新履歴削除で持ち玉と上皿玉を巻き戻す
-dd13f5f Merge pull request #154 from komatsu-dev-jp/claude/upper-tray-step3-TJW9O
-69c8635 feat(ui): 判断タブで補正後と生の値を両方表示 (Step 3)
-696f35f Merge pull request #153 from komatsu-dev-jp/claude/upper-tray-step2b-AarQL
-a555cff feat(decision): 判断ロジックを補正後の値に切り替え (Step 2b)
-c111bb6 Merge pull request #152 from komatsu-dev-jp/claude/upper-tray-step2a-h1kOF
-c4d5d1e feat(logic): 補正後の EV/K とボーダー差を追加 (Step 2a)
-3950690 Merge pull request #151 from komatsu-dev-jp/claude/update-handover-docs-qJ2T8
-ae324b7 docs: HANDOVER.md を新規作成（上皿補正Step1完了・テスト基盤・直近コミット反映）
-97c53a4 Merge pull request #150 from komatsu-dev-jp/claude/regenerate-baseline-b8IDS
+2968730 Merge pull request #182  狩猟型UX Phase 3 - 偵察モード（店舗ランキング）
+b5dc141 feat(scout): 狩猟型UX Phase 3 - 偵察モードを店舗ランキング画面に刷新
+ee3fb5b Merge pull request #181  狩猟型UX Phase 2 - 分析モード
+5de0c86 feat(analysis): 狩猟型UX Phase 2 - 分析モードを収支分析ダッシュボードに刷新
+21a9262 Merge pull request #180  Phase 1.7 + 1.8 - 直近イベント・通知ベル・歯車
+702a932 feat(ui): 記録モードに直近イベント表示と通知ベル/歯車ショートカットを追加
+556c6ad Merge pull request #179  狩猟型UX Phase 0 - 5タブ
+bae1cfe feat(ui): 狩猟型UX Phase 0 - 5タブのモード切替フッターを導入
+04631de Merge pull request #178  狩猟型UX ロードマップ
+4f80a8f docs: 狩猟型UX進化ロードマップ（Phase 0〜7）を新規作成
+960dcbe Merge pull request #177  ダークネイビー配色刷新
+1cae238 style(ui): モックアップ2準拠のブルー寄りダークネイビー配色に刷新
+3461e4c Merge pull request #176  判定バッジ大型化＋円形リング
+42f6b85 feat(ui): 判定バッジを大型化＋円形試行充足率リングに刷新（モックアップ準拠）
+8e3f4e5 Merge pull request #175  「ヤメ」表示修正
+a7861b2 fix(ui): 判定バッジ「ヤメ」が太字日本語フォントメトリクスで上下クリップされる問題を修正
+b7380dc Merge pull request #174  判定バッジコンパクト化
+8801373 fix(ui): 判定バッジのコンパクト化と入力シートの重なり修正
+0db9fc3 Merge pull request #173  実戦タブ統合 Phase 1.B
+979f9f2 feat(ui): 判断タブと回転入力タブを実戦タブに統合（Phase 1.B）
+d276b06 Merge pull request #172  Phase 1 視覚刷新
+72cfefb feat(ui): モックアップ準拠の判断UI視覚刷新（Phase 1 全7サブステップ）
+17a13ee Merge pull request #171  モックアップロードマップ
+d04c092 docs: モックアップ完全再現の中長期ロードマップ設計書を追加
+633c0f0 Merge pull request #170  FlowStatusCard 表示修正
+a6f9e42 fix(ui): 連チャン入力ウィザードのFlowStatusCardがflex内で縮んで隠れる問題を修正
+4b32c0a Merge pull request #169  新規稼働画面刷新
+ae19b48 feat(ui): 新規稼働画面を空状態+ピル形ボタンに刷新、機種選択をボトムシート化
+d4d3cfe Merge pull request #168  更新バナーボトムシート化
+7a5c922 feat(pwa): 更新バナーをボトムシート形式に変更
+7ad3709 Merge pull request #167  更新バナー表示修正
+30b408a fix(pwa): 更新バナーが表示されない問題を修正
+a8a55fb Merge pull request #166  PWA registerType=prompt
+6480867 fix(pwa): registerType を prompt に変更してUIが更新されない問題を修正
+494f870 Merge pull request #165  Codex プロトタイプ統合
+23e7171 fix: apply upper tray correction to decision metrics
+117c136 docs: UI開発フェーズの分離ルールを追記
+779a65d Merge pull request #163  HANDOVER 更新
+c80e5cb docs: HANDOVER.md を更新（サブステップ1〜3完了・バグ修正反映・保留タスク整理）
+4c1dc4d Merge pull request #162  初当たり回転数必須化（前回更新時点）
 ```
 
 ### ブランチ命名規則
@@ -390,51 +551,121 @@ npm run build
 
 ## 10. Codex への引き継ぎ事項
 
-### 必読ドキュメント
+### 必読ドキュメント（優先度順）
 
-1. `CLAUDE.md` — プロジェクト全体ルール（ルート直下）
+1. `CLAUDE.md` — プロジェクト全体ルール（ルート直下）。
+   特に「**UI開発フェーズの分離**」セクション（見た目優先プロトタイプ / 安全な本実装の役割分担）
 2. `docs/HANDOVER.md` — 本ドキュメント
-3. 大当たり後フロー調査レポート — ブランチ `claude/investigate-jackpot-flow-IXTu2` 内
+3. `docs/roadmap-hunter-ux.md` — 狩猟型UX進化ロードマップ（Phase 0〜7、上位ガイド）
+4. `docs/roadmap-mockup-impl.md` — モックアップ完全再現ロードマップ（先行書）
+5. `docs/decision-ui-design.md` — 判断ファーストUI 設計書
+6. 大当たり後フロー調査レポート — ブランチ `claude/investigate-jackpot-flow-IXTu2` 内
+
+> ロードマップが2つあるが、矛盾時は `roadmap-hunter-ux.md` を優先。
+> 先行書のサブステップは新ロードマップの各 Phase に吸収して扱う。
 
 ### 作業開始前の確認コマンド
 
 ```bash
 git fetch origin
-git log --oneline -10
+git log --oneline -15
 
-# サブステップ2: chain に finalRealBalls が追加されているか
+# === 既存機能の確認 ===
+# 大当たり後フロー サブステップ2-3: finalRealBalls / finalRealBallsEdited
 grep -n "finalRealBalls" src/components/Tabs.jsx
-# → L1189 付近に finalRealBalls: undefined があれば サブステップ2 完了済み
 
-# サブステップ3: ラッシュ終了ウィザードに入力Stepがあるか
-grep -n "finalRealBallsEdited" src/components/Tabs.jsx
-# → あればサブステップ3 完了済み
-
-# 初当たり回転数必須化: バリデーションが入っているか
+# 初当たり回転数必須化: バリデーション
 grep -n "inputTrimmed" src/components/Tabs.jsx
-# → L1144 付近にあれば完了済み
 
-# 現金カードバグ: rawInvest を使っているか
+# 現金カードバグ: rawInvest 表示
 grep -n "ev.rawInvest" src/components/Tabs.jsx
-# → L1887 付近にあれば完了済み（S.investYen のままなら未修正）
+# → L460 付近で stat("総投資額", hasRot ? f(ev.rawInvest) : "—", ...) があれば OK
+
+# === 狩猟型UX Phase 0-3 の確認 ===
+# Phase 0: モード切替の状態
+grep -n "pt_currentMode" src/App.jsx
+# → L37 付近に const [currentMode, setCurrentMode] = useLS("pt_currentMode", "record")
+
+# Phase 0: モードルーター
+grep -n "currentMode ===" src/App.jsx
+# → L465-476 で scout / select / record / analysis / settings の5分岐
+
+# Phase 2: 分析ダッシュボード
+ls src/components/analysis/   # AnalysisDashboard.jsx, analysisSelectors.js
+
+# Phase 3: 偵察ダッシュボード
+ls src/components/scout/      # ScoutDashboard, StoreRankingCard, TodayHighlightList, scoutSelectors.js
+ls src/dummyData.js           # 偵察モード用のダミーデータ
+
+# Phase 1.7: 直近イベントリスト
+ls src/components/decision/RecentEventList.jsx
 ```
 
-### 直近の状態サマリー
+### 直近の状態サマリー（2026-05-19 時点）
 
-- main ブランチ最新コミット: `4c1dc4d`（PR #162、初当たり回転数必須化）
-- 上皿補正: Step 1〜3 すべて完了・マージ済み
-- 大当たり後フロー: サブステップ1〜3 完了、**サブステップ4以降は保留**
-- 現金カードバグ: 修正済み（PR #160）
-- 初当たり回転数必須化: 完了（PR #162）
-- プッシュ補正Step: 完了（PR #161）
+- **main ブランチ最新コミット**: `2968730`（PR #182、偵察モード Phase 3 完了）
+- **狩猟型UX**: Phase 0・1・1.B・1.5・1.6・1.7・1.8・2・3 完了。**次は Phase 4（台選びモード）または Phase 5（P-EVIDENCE 移植）**
+- **配色**: モック2準拠のブルー寄りダークネイビーに刷新済み（PR #177）
+- **判定バッジ**: 大型化＋円形試行充足率リング、各種表示バグ修正済み（PR #174・#175・#176）
+- **実戦タブ**: 判断 + 回転入力を統合（Phase 1.B、PR #173）。クイック入力 +1/+5/+10/+25 は廃止、テンキーは bottom sheet 化
+- **PWA**: `registerType: prompt` + ボトムシート形式の更新バナー（PR #166・#167・#168）
+- **上皿補正**: Step 1〜3 完了。Step 2b で判断ロジックも補正後の値を使用
+- **大当たり後フロー**: サブステップ1〜3 完了。**サブステップ4以降は保留**
+- **既存バグ修正**: 現金カード 0円（PR #160）、履歴削除（PR #155）、`FlowStatusCard` 表示（PR #170）
 
-### 次にやること
+### 次にやることの候補（優先順）
 
-**保留タスク2（サブステップ4）が最優先**:
-`calcPreciseEV` の `totalNetGain` 集計に `finalRealBalls` の分岐を追加する。
-`chain.finalRealBalls !== undefined` のとき実測ベース計算、フォールバックは液晶ベース。
+着手前に**必ずユーザーに方針確認**すること。以下は推奨順。
 
-実装後は必ず:
-1. `node src/__tests__/protected-fns.mjs` を実行してスナップショットと比較
-2. `logic.js` を変更した場合は `baseline.json` の再生成が必要（サブステップ5）
-3. `npm run lint && npm run build` がエラーゼロ
+#### 候補A：保留タスク2（大当たり後フロー サブステップ4・5）を先行消化【推奨】
+
+理由：Phase 5（P-EVIDENCE 移植）が実測ベース netGain を必要とするため、先に消化しておきたい。
+
+実装内容：
+1. `calcPreciseEV` の `totalNetGain` 集計に `chain.finalRealBalls !== undefined` の分岐追加
+2. フォールバックは液晶ベース（後方互換）
+3. `baseline.json` を再生成（diff レビュー必須）
+4. `node src/__tests__/protected-fns.mjs` でスナップショット確認
+5. `npm run lint && npm run build` エラーゼロ
+
+#### 候補B：狩猟型UX Phase 4（台選びモード）
+
+理由：ロードマップ通りの進行。ただし良台スコアリング定義が未確定。
+
+着手前確認：
+- 良台スコアリングの定義式（True Border 余裕 + 試行充足率 + データ蓄積量の合成式）
+- 「島平均」「前日実績」の集計定義
+- 島の物理隣接情報の必要性（当面は線形配置で代替可）
+
+#### 候補C：狩猟型UX Phase 5（P-EVIDENCE 移植）
+
+**前提**: GAS スプレッドシートの数式群を**ユーザーから共有してもらうことが必須**（未受領）。
+
+未受領のままならインターフェース固定でダミー実装まで進める：
+- `src/evidence.js` を新規作成（`logic.js` には統合しない）
+- 入出力：`{ trueBorder, posteriorMean, trialSufficiency, evAdjusted, scoreForRanking, reasons, predictedRotToConfidence40 }`
+- `src/__tests__/evidence.test.mjs` 新規
+
+#### 候補D：偵察モードのダミー → 実データ切替
+
+「店舗実績」タブのみ既存 `archives` から店舗別集計で本実装可能。
+「本日予測」「イベント」タブは Phase 5 完了後に保留。
+
+### Codex と Claude Code の役割分担（再掲）
+
+| 作業種別 | 主担当 |
+|---|---|
+| `logic.js` 変更・新規計算ロジック | **Claude Code** |
+| `evidence.js` 移植・集計セレクタ | **Claude Code** |
+| データ構造設計・マイグレーション | **Claude Code** |
+| テスト追加（境界値・スナップショット） | **Claude Code** |
+| UIコンポーネントの新規作成（見た目主） | **Codex** |
+| CSS・色トークン・装飾調整 | **Codex** |
+| アニメーション・演出 | **Codex** |
+| HANDOVER.md / ロードマップ更新 | **Claude Code** |
+
+ブランチ命名：
+```
+claude/<説明>-<rand4>   # Claude Code 担当
+codex/<説明>-<rand4>    # Codex 担当
+```
