@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useLS, calcPreciseEV } from "./logic";
 import { useUndoStack } from "./history";
-import { C, font } from "./constants";
+import { C, font, tsNow } from "./constants";
 import { RotTab, SettingsTab } from "./components/Tabs";
 import ModeTabBar from "./components/ModeTabBar";
 import AnalysisDashboard from "./components/analysis/AnalysisDashboard";
@@ -469,6 +469,18 @@ export default function App() {
             onStart={(machine) => {
               setMachineNum(String(machine.machineNumber || ""));
               setMachineName(machine.machineName || "");
+              if (!sessionStarted) {
+                setStartRot(0);
+                setCurrentMochiBalls(0);
+                setInitialChodama(currentChodama || 0);
+                setSessionStarted(true);
+                setRotRows((prev) => (
+                  prev.length > 0
+                    ? prev
+                    : [{ type: "start", cumRot: 0, mode: playMode, mochiBalls: 0, chodamaBalls: currentChodama || 0 }]
+                ));
+                setSesLog((prev) => [...prev, { type: "スタート", time: tsNow(), rot: 0 }]);
+              }
               setCurrentMode("record");
             }}
           />
