@@ -188,6 +188,16 @@ export default function App() {
   // セッション内サブタブ
   const [sessionSubTab, setSessionSubTab] = useState("rot");
 
+  // 下部タブから「記録」モードへ遷移した際は、必ず実戦サブタブを最初に表示する。
+  // sessionSubTab が "history" のまま残っていると、初当たり入力モーダルが
+  // 自動で開く挙動になっていたため（Tabs.jsx の auto-open useEffect 参照）。
+  const handleModeChange = useCallback((nextMode) => {
+    if (nextMode === "record") {
+      setSessionSubTab("rot");
+    }
+    setCurrentMode(nextMode);
+  }, [setCurrentMode]);
+
   // Session info
   const [storeName, setStoreName] = useLS("pt_storeName", "");
   const [machineNum, setMachineNum] = useLS("pt_machineNum", "");
@@ -774,7 +784,7 @@ export default function App() {
       </main>
 
       {/* Mode Navigation (5 タブ) */}
-      <ModeTabBar currentMode={currentMode} onChange={setCurrentMode} />
+      <ModeTabBar currentMode={currentMode} onChange={handleModeChange} />
 
       {/* Phase 6: レベルアップトースト */}
       <LevelUpToast
