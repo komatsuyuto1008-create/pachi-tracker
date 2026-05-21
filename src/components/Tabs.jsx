@@ -3599,8 +3599,6 @@ export function RotTab({ border: displayBorder, rows, setRows, S, ev }) {
                         { label: "なし",   onClick: () => updField("pushAmount", 0),     active: !D.pushAmount },
                         { label: "+500",   onClick: () => updField("pushAmount", 500),   active: D.pushAmount === 500 },
                         { label: "+1000",  onClick: () => updField("pushAmount", 1000),  active: D.pushAmount === 1000 },
-                        { label: "+2000",  onClick: () => updField("pushAmount", 2000),  active: D.pushAmount === 2000 },
-                        { label: "+3000",  onClick: () => updField("pushAmount", 3000),  active: D.pushAmount === 3000 },
                         { label: "クリア", onClick: () => updField("pushAmount", 0),     active: false },
                     ];
 
